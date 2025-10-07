@@ -1,0 +1,6 @@
+__pycache__/
+.venv/
+*.pyc
+.env
+uploads/
+firebase_credentials.json

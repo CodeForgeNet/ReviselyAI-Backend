@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+python-dotenv
+python-multipart
+aiofiles
+requests
+PyMuPDF
+firebase-admin
+langchain
+faiss-cpu
+sentence-transformers
+numpy
+pydantic
+python-jose[cryptography]
+cloudinary
