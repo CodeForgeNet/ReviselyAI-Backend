@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Response, BackgroundTasks
 from datetime import datetime
 from bson.objectid import ObjectId
 from .auth import get_current_user
@@ -25,7 +25,7 @@ class PDFFileBase(BaseModel):
 router = APIRouter()
 
 @router.post("/upload")
-async def upload_pdf(request: Request, file: UploadFile = File(...), current_user = Depends(get_current_user)):
+async def upload_pdf(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...), current_user = Depends(get_current_user)):
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
     
@@ -55,7 +55,7 @@ async def upload_pdf(request: Request, file: UploadFile = File(...), current_use
     # Start indexing in background task
     if os.getenv("RAG_ENABLED", "true").lower() in ("1", "true", "yes"):
         from main import build_index_background
-        request.app.background_tasks.add_task(
+        background_tasks.add_task(
             build_index_background, str(result_metadata.inserted_id), file_id)
     
     return {"id": str(result_metadata.inserted_id), "title": file.filename, "is_indexed": False}
@@ -70,7 +70,7 @@ async def list_pdfs(request: Request, current_user = Depends(get_current_user)):
         pdfs.append(PDFFileBase(**doc)) # Convert to Pydantic model
     return pdfs
 
-@router.get("/{pdf_id}", response_model=List[PDFFileBase])
+@router.get("/{pdf_id}", response_model=PDFFileBase)
 async def get_pdf(pdf_id: str, request: Request, current_user = Depends(get_current_user)):
     try:
         pdf = await request.app.db.pdfs.find_one({"_id": ObjectId(pdf_id), "user_id": current_user.id})
