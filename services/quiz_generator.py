@@ -1,11 +1,11 @@
 # services/quiz_generator.py
 import json
-from services.gemini_client import call_gemini
+from services.gemini_client import get_gemini_response
 from typing import Any, Optional
 from services.rag_engine import retrieve_top_k_if_exists
 
 
-def generate_quiz_from_text(text: str, mcq: int = 5, saq: int = 3, laq: int = 1, context: Optional[str] = None) -> Any:
+async def generate_quiz_from_text(text: str, mcq: int = 5, saq: int = 3, laq: int = 1, context: Optional[str] = None) -> Any:
     """
     If context provided (from RAG), include it to improve quiz quality.
     Returns raw JSON string (prefer returning json, but depends on model).
@@ -18,7 +18,7 @@ def generate_quiz_from_text(text: str, mcq: int = 5, saq: int = 3, laq: int = 1,
     if context:
         prompt += f"Use the following supporting context from the textbook when relevant:\n{context}\n\n"
     prompt += f"Text:\n{truncated}\n\nOutput strictly as JSON with keys: mcqs, saqs, laqs. Each mcq: question, options[], answer_index, explanation.\n"
-    raw = call_gemini(prompt, max_tokens=8192)
+    raw = await get_gemini_response(prompt, max_tokens=8192)
     # Try to parse JSON - if model returned JSON string
     try:
         # Strip markdown code block if present

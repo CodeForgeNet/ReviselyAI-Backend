@@ -13,14 +13,14 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-def call_gemini(prompt: str, max_tokens: int = 2048):
+async def get_gemini_response(prompt: str, max_tokens: int = 2048):
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not set in environment variables.")
 
     model = genai.GenerativeModel('gemini-2.5-flash')
 
     try:
-        response = model.generate_content(prompt, generation_config={
+        response = await model.generate_content_async(prompt, generation_config={
             "max_output_tokens": max_tokens
         })
         logger.debug(f"Gemini API response object: {response}")

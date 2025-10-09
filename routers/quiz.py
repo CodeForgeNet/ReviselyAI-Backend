@@ -32,7 +32,7 @@ async def generate(request: Request, pdf_id: str = Query(...), mcq: int = 5, saq
     except Exception:
         context = None
     
-    questions = generate_quiz_from_text(
+    questions = await generate_quiz_from_text(
         text, mcq=mcq, saq=saq, laq=laq, context=context)
     
     # if questions is raw string, wrap it

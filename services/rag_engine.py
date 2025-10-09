@@ -8,7 +8,7 @@ import shutil
 from bson.objectid import ObjectId
 import motor.motor_asyncio  # Import motor for async client
 from pymongo import MongoClient  # Import MongoClient for sync client if needed
-from services.gemini_client import call_gemini # Import call_gemini for answer_with_context
+from services.gemini_client import get_gemini_response # Import get_gemini_response for answer_with_context
 
 # pdf_id is now str, file_id is str
 async def build_vectorstore_for_pdf(pdf_id: str, file_id: str, db):
@@ -70,7 +70,7 @@ def retrieve_top_k_if_exists(pdf_id: str, query: str, k: int = 3):
     return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
 
 
-def answer_with_context(pdf_id: str, question: str, top_k: int = 4):
+async def answer_with_context(pdf_id: str, question: str, top_k: int = 4):
     retrieved_docs = retrieve_top_k_if_exists(pdf_id, question, k=top_k)
     
     if not retrieved_docs:
@@ -91,7 +91,7 @@ def answer_with_context(pdf_id: str, question: str, top_k: int = 4):
     Example citation: (p. 23)
     """
     
-    raw_answer = call_gemini(prompt, max_tokens=500)
+    raw_answer = await get_gemini_response(prompt, max_tokens=500)
     
     # Extract sources from retrieved_docs for citation
     sources = []
