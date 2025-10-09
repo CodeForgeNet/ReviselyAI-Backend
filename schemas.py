@@ -13,9 +13,16 @@ class PyObjectId(ObjectId):
                 raise PydanticCustomError("invalid_object_id", "Invalid ObjectId")
             return ObjectId(input_value)
 
-        return core_schema.no_info_plain_validator_function(
-            validate_from_str,
-            serialization=core_schema.to_string_ser_schema(),
+        def serialize_to_str(instance: ObjectId) -> str:
+            return str(instance)
+
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.str_schema(),
+            python_schema=core_schema.union_schema([
+                core_schema.is_instance_schema(ObjectId),
+                core_schema.no_info_plain_validator_function(validate_from_str),
+            ]),
+            serialization=core_schema.plain_serializer_function_ser_schema(serialize_to_str),
         )
 
 

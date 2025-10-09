@@ -110,7 +110,7 @@ async def submit_quiz(payload: QuizSubmit, request: Request, user=Depends(get_cu
 
 @router.get("/")
 async def get_progress(request: Request, user=Depends(get_current_user)):
-    all_attempts = await request.app.db.quiz_attempts.find({"user_id": user.id}).to_list(length=None)
+    all_attempts = await request.app.db.quiz_attempts.find({"user_id": user.id}).sort("created_at", -1).to_list(length=None)
     
     overall_total_questions = 0
     overall_correct_answers = 0
