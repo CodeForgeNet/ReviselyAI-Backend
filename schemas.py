@@ -1,8 +1,8 @@
 from pydantic import BaseModel, Field
-from typing import Any, List, Optional, Callable # Import Callable
+from typing import Any, List, Optional, Callable 
 from datetime import datetime
-from bson import ObjectId # Import ObjectId for custom type
-from pydantic_core import core_schema, PydanticCustomError # Import core_schema and PydanticCustomError
+from bson import ObjectId 
+from pydantic_core import core_schema, PydanticCustomError 
 
 
 class PyObjectId(ObjectId):
@@ -31,7 +31,7 @@ class TokenIn(BaseModel):
 
 
 class UploadResp(BaseModel):
-    id: str = Field(alias="_id") # MongoDB _id
+    id: str = Field(alias="_id") 
     title: str
     is_indexed: bool
 
@@ -42,12 +42,12 @@ class UploadResp(BaseModel):
 
 
 class PDFFileBase(BaseModel):
-    id: str = Field(alias="_id") # MongoDB _id
+    id: str = Field(alias="_id") 
     title: str
     user_id: str
     is_indexed: bool
     created_at: datetime
-    file_id: str # Link to the content document
+    file_id: str 
     
     class Config:
         allow_population_by_field_name = True
@@ -56,7 +56,7 @@ class PDFFileBase(BaseModel):
 
 
 class GenerateQuizResp(BaseModel):
-    quiz_id: str = Field(alias="_id") # MongoDB _id
+    quiz_id: str = Field(alias="_id") 
     questions: Any
 
     class Config:
@@ -73,12 +73,12 @@ class ChatRequest(BaseModel):
 
 class ChatResp(BaseModel):
     answer: str
-    sources: List[str] # Sources will be strings now
+    sources: List[str] 
 
 
 class ReviseChatRequestCreate(BaseModel):
     question: str
-    session_id: Optional[str] = None # Add session_id for continuing conversations
+    session_id: Optional[str] = None 
 
 
 class ReviseChatMessage(BaseModel):
@@ -96,7 +96,7 @@ class ReviseChatSessionCreate(BaseModel):
 
 
 class ReviseChatSession(BaseModel):
-    id: PyObjectId = Field(alias="_id") # id is required for existing sessions
+    id: PyObjectId = Field(alias="_id") 
     user_id: str
     title: str
     messages: List[ReviseChatMessage] = []
@@ -111,4 +111,4 @@ class ReviseChatSession(BaseModel):
 
 class QuizSubmit(BaseModel):
     quiz_id: str
-    answers: Any  # e.g., {"mcq":[1,0,2], "saq": {...}}
+    answers: Any  
