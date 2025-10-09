@@ -1,36 +1,41 @@
-# services/gemini_client.py
 import os
-import requests
-from typing import Any
+import logging
+import google.generativeai as genai
+from dotenv import load_dotenv
 
-GEMINI_URL = os.getenv("GEMINI_API_URL")
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+load_dotenv()
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-def call_gemini(prompt: str, max_tokens: int = 1024, temperature: float = 0.2) -> str:
-    """
-    Generic HTTP POST to your Gemini endpoint. Adapt payload shape to your endpoint if needed.
-    """
-    if not GEMINI_URL or not GEMINI_KEY:
-        raise RuntimeError(
-            "GEMINI_API_URL and GEMINI_API_KEY must be set in env")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-    headers = {
-        "Authorization": f"Bearer {GEMINI_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "prompt": prompt,
-        "max_output_tokens": max_tokens,
-        "temperature": temperature
-    }
-    r = requests.post(GEMINI_URL, json=payload, headers=headers, timeout=60)
-    r.raise_for_status()
-    data = r.json()
-    # parse common shapes
-    if isinstance(data, dict):
-        if "candidates" in data and data["candidates"]:
-            return data["candidates"][0].get("content", str(data))
-        if "output" in data and data["output"]:
-            return data["output"][0].get("content", str(data))
-    return str(data)
+genai.configure(api_key=GEMINI_API_KEY)
+
+def call_gemini(prompt: str, max_tokens: int = 2048):
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY not set in environment variables.")
+
+    model = genai.GenerativeModel('gemini-2.5-flash')
+
+    try:
+        response = model.generate_content(prompt, generation_config={
+            "max_output_tokens": max_tokens
+        })
+        logger.debug(f"Gemini API response object: {response}")
+
+        # Check if candidates exist and have content
+        if response.candidates and response.candidates[0].content.parts:
+            generated_text = response.candidates[0].content.parts[0].text
+            logger.debug(f"Gemini API generated text: {generated_text}")
+            return generated_text
+        else:
+            # If no parts or content, check finish_reason for more info
+            finish_reason = response.candidates[0].finish_reason if response.candidates else None
+            logger.warning(f"Gemini API did not return text content. Finish reason: {finish_reason}")
+            return "I'm sorry, I couldn't generate a complete response. Please try again or rephrase your question."
+
+    except Exception as e:
+        logger.error(f"Gemini API call failed: {e}")
+        raise

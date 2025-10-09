@@ -18,7 +18,7 @@ def generate_quiz_from_text(text: str, mcq: int = 5, saq: int = 3, laq: int = 1,
     if context:
         prompt += f"Use the following supporting context from the textbook when relevant:\n{context}\n\n"
     prompt += f"Text:\n{truncated}\n\nOutput strictly as JSON with keys: mcqs, saqs, laqs. Each mcq: question, options[], answer_index, explanation.\n"
-    raw = call_gemini(prompt, max_tokens=1200)
+    raw = call_gemini(prompt, max_tokens=8192)
     # Try to parse JSON - if model returned JSON string
     try:
         parsed = json.loads(raw)
