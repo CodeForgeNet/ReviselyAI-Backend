@@ -1,28 +1,27 @@
-# routers/progress.py
-from fastapi import APIRouter, Depends, HTTPException
-from database import get_db
-from sqlalchemy.orm import Session
-from models.quiz import Quiz
-from models.quiz_attempt import QuizAttempt
-from models.progress import Progress
+from fastapi import APIRouter, Depends, HTTPException, Request
 from routers.auth import get_current_user
 from schemas import QuizSubmit
 import math
+from bson.objectid import ObjectId # Import ObjectId for MongoDB _id
+from datetime import datetime # Import datetime for timestamps
 
 router = APIRouter()
 
 
 @router.post("/submit")
-def submit_quiz(payload: QuizSubmit, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    quiz = db.query(Quiz).filter_by(id=payload.quiz_id).first()
+async def submit_quiz(payload: QuizSubmit, request: Request, user=Depends(get_current_user)):
+    # Find quiz in MongoDB
+    quiz = await request.app.db.quizzes.find_one({"_id": ObjectId(payload.quiz_id)})
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+    
     # scoring: we assume quiz.questions has 'mcqs' list with answer_index field
-    questions = quiz.questions
+    questions = quiz.get("questions", {})
     score = 0
     total = 0
+    
     # handle mcq scoring
-    mcqs = questions.get("mcqs") if isinstance(questions, dict) else None
+    mcqs = questions.get("mcqs")
     if mcqs and "mcq" in payload.answers:
         user_answers = payload.answers.get("mcq", [])
         for i, q in enumerate(mcqs):
@@ -30,20 +29,39 @@ def submit_quiz(payload: QuizSubmit, db: Session = Depends(get_db), user=Depends
             correct_idx = q.get("answer_index")
             if i < len(user_answers) and user_answers[i] == correct_idx:
                 score += 1
+    
     # store attempt
-    attempt = QuizAttempt(quiz_id=payload.quiz_id, user_id=user.id, score=int(
-        score), answers=payload.answers)
-    db.add(attempt)
-    db.commit()
+    attempt_doc = {
+        "quiz_id": payload.quiz_id,
+        "user_id": user.id, # user.id is now a string from MongoDB _id
+        "score": int(score),
+        "answers": payload.answers,
+        "created_at": datetime.utcnow()
+    }
+    await request.app.db.quiz_attempts.insert_one(attempt_doc)
+    
     # update progress basic metric
-    topic = f"pdf_{quiz.pdf_id}"
+    topic = f"pdf_{quiz['pdf_id']}" # Assuming quiz has pdf_id
     pct = (score/total)*100 if total > 0 else 0
-    prog = db.query(Progress).filter_by(user_id=user.id, topic=topic).first()
+    
+    # Find existing progress or create new
+    prog = await request.app.db.progress.find_one({"user_id": user.id, "topic": topic})
+    
     if not prog:
-        prog = Progress(user_id=user.id, topic=topic, accuracy=pct)
-        db.add(prog)
+        progress_doc = {
+            "user_id": user.id,
+            "topic": topic,
+            "accuracy": pct,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        await request.app.db.progress.insert_one(progress_doc)
     else:
         # naive average update
-        prog.accuracy = (prog.accuracy + pct) / 2
-    db.commit()
+        new_accuracy = (prog["accuracy"] + pct) / 2
+        await request.app.db.progress.update_one(
+            {"_id": prog["_id"]},
+            {"$set": {"accuracy": new_accuracy, "updated_at": datetime.utcnow()}}
+        )
+    
     return {"score": int(score), "total": int(total), "pct": pct}

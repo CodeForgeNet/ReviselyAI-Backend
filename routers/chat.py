@@ -1,18 +1,15 @@
-# routers/chat.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from schemas import ChatRequest, ChatResp
 from services.rag_engine import answer_with_context
-from database import get_db
-from sqlalchemy.orm import Session
-from models.pdf_file import PDFFile
 from routers.auth import get_current_user
+from bson.objectid import ObjectId # Import ObjectId for MongoDB _id
 
 router = APIRouter()
 
 
 @router.post("/ask", response_model=ChatResp)
-def ask(payload: ChatRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    pdf = db.query(PDFFile).filter_by(id=payload.pdf_id).first()
+async def ask(payload: ChatRequest, request: Request, user=Depends(get_current_user)):
+    pdf = await request.app.db.pdfs.find_one({"_id": ObjectId(payload.pdf_id), "user_id": user.id})
     if not pdf:
         raise HTTPException(status_code=404, detail="PDF not found")
     res = answer_with_context(

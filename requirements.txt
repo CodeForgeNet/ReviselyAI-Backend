@@ -1,7 +1,5 @@
 fastapi
 uvicorn[standard]
-sqlalchemy
-psycopg2-binary
 python-dotenv
 python-multipart
 aiofiles
@@ -9,9 +7,11 @@ requests
 PyMuPDF
 firebase-admin
 langchain
+langchain_community
 faiss-cpu
 sentence-transformers
 numpy
 pydantic
 python-jose[cryptography]
-cloudinary
+motor
+pymongo

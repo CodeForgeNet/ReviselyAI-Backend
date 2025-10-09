@@ -1,116 +1,102 @@
-# services/rag_engine.py
 import os
-import pickle
-import numpy as np
-from typing import List, Dict, Any
-from services.pdf_reader import extract_pages, chunk_pages_with_meta
-from sentence_transformers import SentenceTransformer
-import faiss
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+import requests
+import shutil
+from bson.objectid import ObjectId
+import motor.motor_asyncio  # Import motor for async client
+from pymongo import MongoClient  # Import MongoClient for sync client if needed
+from services.gemini_client import call_gemini # Import call_gemini for answer_with_context
 
-VECTOR_DIR = "vectorstores"
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-os.makedirs(VECTOR_DIR, exist_ok=True)
+# pdf_id is now str, file_id is str
+async def build_vectorstore_for_pdf(pdf_id: str, file_id: str, db):
+    # Create a temporary directory for the PDF
+    temp_dir = f"temp_pdfs/{pdf_id}"
+    os.makedirs(temp_dir, exist_ok=True)
+    pdf_path = os.path.join(temp_dir, f"{pdf_id}.pdf")
 
-# Lazy-load model
-_embedding_model = None
+    try:
+        # Fetch the PDF content from MongoDB
+        pdf_content_doc = await db.pdfs_content.find_one({"_id": ObjectId(file_id)})
+        if not pdf_content_doc:
+            raise FileNotFoundError(f"PDF content not found for file_id: {file_id}")
+        
+        pdf_content = pdf_content_doc["content"]
 
+        # Write content to a temporary file
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_content)
 
-def _get_embedder():
-    global _embedding_model
-    if _embedding_model is None:
-        _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    return _embedding_model
+        # Load and split the PDF
+        loader = PyPDFLoader(pdf_path)
+        documents = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, chunk_overlap=200)
+        texts = text_splitter.split_documents(documents)
 
+        # Create embeddings and vector store
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vectorstore = FAISS.from_documents(texts, embeddings)
 
-def build_vectorstore_for_pdf(pdf_id: int, pdf_path: str):
-    pages = extract_pages(pdf_path)
-    docs = chunk_pages_with_meta(pages, chunk_size=2000, overlap=200)
-    texts = [d["text"] for d in docs]
-    model = _get_embedder()
-    embeddings = model.encode(
-        texts, convert_to_numpy=True, show_progress_bar=True)
-    # normalize for cosine-sim using inner product
-    faiss.normalize_L2(embeddings)
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)
-    index.add(embeddings)
-    idx_path = os.path.join(VECTOR_DIR, f"{pdf_id}.index.faiss")
-    meta_path = os.path.join(VECTOR_DIR, f"{pdf_id}.meta.pkl")
-    faiss.write_index(index, idx_path)
-    with open(meta_path, "wb") as f:
-        pickle.dump(docs, f)
-    return {"index_path": idx_path, "meta_path": meta_path, "count": len(docs)}
+        # Save the vector store
+        vectorstore_path = f"vectorstores/{pdf_id}"
+        vectorstore.save_local(vectorstore_path)
+        print(f"Vector store for PDF {pdf_id} built and saved.")
 
-
-def _load_index_and_meta(pdf_id: int):
-    idx_path = os.path.join(VECTOR_DIR, f"{pdf_id}.index.faiss")
-    meta_path = os.path.join(VECTOR_DIR, f"{pdf_id}.meta.pkl")
-    if not os.path.exists(idx_path) or not os.path.exists(meta_path):
-        return None, None
-    index = faiss.read_index(idx_path)
-    with open(meta_path, "rb") as f:
-        meta = pickle.load(f)
-    return index, meta
-
-
-def retrieve_top_k(pdf_id: int, query: str, k: int = 4):
-    index, meta = _load_index_and_meta(pdf_id)
-    if index is None:
-        return []
-    model = _get_embedder()
-    q_emb = model.encode([query], convert_to_numpy=True)
-    faiss.normalize_L2(q_emb)
-    D, I = index.search(q_emb, k)
-    results = []
-    for score, idx in zip(D[0], I[0]):
-        if idx < 0:
-            continue
-        item = meta[idx].copy()
-        item["score"] = float(score)
-        results.append(item)
-    return results
+    except Exception as e:
+        print(f"Error building vector store for PDF {pdf_id}: {e}")
+        raise
+    finally:
+        # Clean up temporary directory
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
 
-def retrieve_top_k_if_exists(pdf_id: int, query: str, k: int = 4):
-    # wrapper used by quiz generator - returns concatenated context or None
-    res = retrieve_top_k(pdf_id, query, k=k)
-    if not res:
-        return None
-    ctx = []
-    for r in res:
-        # attach page info for citation
-        ctx.append(
-            f"(p{','.join(map(str, r.get('pages', [])))}): {r['preview']}")
-    return "\n\n".join(ctx)
+def retrieve_top_k_if_exists(pdf_id: str, query: str, k: int = 3):
+    vectorstore_path = f"vectorstores/{pdf_id}"
+    if not os.path.exists(vectorstore_path):
+        print(f"Vector store not found for PDF {pdf_id}. Cannot retrieve context.")
+        return [] # Return empty list if no vector store
+
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    vectorstore = FAISS.load_local(vectorstore_path, embeddings, allow_dangerous_deserialization=True)
+    
+    docs = vectorstore.similarity_search(query, k=k)
+    
+    # Return list of dicts with page_content and metadata
+    return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
 
 
-def answer_with_context(pdf_id: int, question: str, top_k: int = 4):
+def answer_with_context(pdf_id: str, question: str, top_k: int = 4):
+    retrieved_docs = retrieve_top_k_if_exists(pdf_id, question, k=top_k)
+    
+    if not retrieved_docs:
+        return {"answer": "I could not find relevant information in the document.", "sources": []}
+
+    context_text = "\n\n".join([doc["page_content"] for doc in retrieved_docs])
+    
+    prompt = f"""
+    You are a helpful assistant that answers questions based on the provided context.
+    If the answer is not in the context, politely state that you don't have enough information.
+    
+    Context:
+    {context_text}
+    
+    Question: {question}
+    
+    Provide a concise answer. If applicable, cite the source page numbers from the context.
+    Example citation: (p. 23)
     """
-    Retrieve relevant chunks and create an answer using Gemini.
-    Returns dict: {answer, sources: [{page, preview, score}], raw_model_output}
-    """
-    from services.gemini_client import call_gemini
-
-    results = retrieve_top_k(pdf_id, question, k=top_k)
-    if not results:
-        # fallback: ask the model directly without context
-        raw = call_gemini(f"Answer this question:\n{question}", max_tokens=600)
-        return {"answer": raw, "sources": []}
-
-    # Build context string
-    context = ""
-    for r in results:
-        pages = ",".join(map(str, r.get("pages", [])))
-        context += f"[p{pages}] {r['text']}\n\n"
-
-    prompt = (
-        "You are a helpful teacher. Use the context below (which comes from the student's textbook) to answer the question.\n"
-        "When you use information from the context, add a citation like (pX) next to the sentence. If answer cannot be found, say 'Not in provided textbook'.\n\n"
-        "Context:\n" + context + "\n\nQuestion:\n" + question +
-        "\n\nAnswer clearly and include short citations and, if possible, a 1-2 line quote from the context."
-    )
-
-    raw = call_gemini(prompt, max_tokens=800)
-    sources = [{"pages": r.get("pages"), "preview": r.get(
-        "preview"), "score": r.get("score")} for r in results]
-    return {"answer": raw, "sources": sources, "raw": raw}
+    
+    raw_answer = call_gemini(prompt, max_tokens=500)
+    
+    # Extract sources from retrieved_docs for citation
+    sources = []
+    for doc in retrieved_docs:
+        if "page" in doc["metadata"]:
+            sources.append(f"p. {doc['metadata']['page']}: '{doc['page_content'][:100]}...'") # Snippet of 100 chars
+    
+    return {"answer": raw_answer, "sources": sources}
