@@ -1,10 +1,8 @@
-import fitz # PyMuPDF
+import fitz
 import io
 
+
 def extract_text(pdf_content: bytes) -> str:
-    """
-    Extracts text from PDF content (bytes).
-    """
     try:
         doc = fitz.open(stream=pdf_content, filetype="pdf")
         text = ""
@@ -14,4 +12,4 @@ def extract_text(pdf_content: bytes) -> str:
         return text
     except Exception as e:
         print(f"Error extracting text from PDF: {e}")
-        raise # Re-raise the exception
+        raise

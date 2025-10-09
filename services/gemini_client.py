@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configure logging
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,6 @@ async def get_gemini_response(prompt: str, max_tokens: int = 2048):
 
     model = genai.GenerativeModel('gemini-2.5-flash')
 
-    # Prepend system instruction for concise answers
     full_prompt = f"Please provide a concise answer to the following question: {prompt}"
 
     try:
@@ -28,12 +27,11 @@ async def get_gemini_response(prompt: str, max_tokens: int = 2048):
             "max_output_tokens": max_tokens
         })
 
-        # Check if candidates exist and have content
         if response.candidates and response.candidates[0].content.parts:
             generated_text = response.candidates[0].content.parts[0].text
             return generated_text
         else:
-            # If no parts or content, check finish_reason for more info
+
             finish_reason = response.candidates[0].finish_reason if response.candidates else None
             logger.warning(
                 f"Gemini API did not return text content. Finish reason: {finish_reason}")

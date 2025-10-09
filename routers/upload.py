@@ -2,11 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from datetime import datetime
 from bson.objectid import ObjectId
 from .auth import get_current_user
-from typing import List  # Import List for type hinting
-from pydantic import BaseModel  # Import BaseModel for schema definition
-import os  # Import os for os.getenv
-
-# Define a simple schema for PDF metadata for now
+from typing import List
+from pydantic import BaseModel
+import os
 
 
 class PDFFileBase(BaseModel):
@@ -15,7 +13,7 @@ class PDFFileBase(BaseModel):
     user_id: str
     is_indexed: bool
     created_at: datetime
-    file_id: str  # Add file_id field
+    file_id: str
 
     class Config:
         json_encoders = {
@@ -36,7 +34,6 @@ async def upload_pdf(request: Request, background_tasks: BackgroundTasks, file: 
 
     contents = await file.read()
 
-    # Store PDF content in a separate collection
     pdf_content_doc = {
         "filename": file.filename,
         "content": contents,
@@ -45,20 +42,18 @@ async def upload_pdf(request: Request, background_tasks: BackgroundTasks, file: 
         "user_id": current_user.id
     }
     result_content = await request.app.db.pdfs_content.insert_one(pdf_content_doc)
-    # Use the _id of the content document as file_id
+
     file_id = str(result_content.inserted_id)
 
-    # Store PDF metadata
     pdf_metadata = {
         "title": file.filename,
         "user_id": current_user.id,
-        "file_id": file_id,  # Link to the content document
+        "file_id": file_id,
         "created_at": datetime.utcnow(),
         "is_indexed": False
     }
     result_metadata = await request.app.db.pdfs.insert_one(pdf_metadata)
 
-    # Start indexing in background task
     if os.getenv("RAG_ENABLED", "true").lower() in ("1", "true", "yes"):
         from main import build_index_background
         background_tasks.add_task(
@@ -81,7 +76,7 @@ async def list_pdfs(request: Request, current_user=Depends(get_current_user)):
     async for doc in cursor:
         doc["id"] = str(doc["_id"])
         doc.pop("_id")
-        pdfs.append(PDFFileBase(**doc))  # Convert to Pydantic model
+        pdfs.append(PDFFileBase(**doc))
     return pdfs
 
 
@@ -105,7 +100,6 @@ async def get_file(file_id: str, request: Request, current_user=Depends(get_curr
     try:
         print(f"Fetching file with ID: {file_id} for user: {current_user.id}")
 
-        # Verify the file_id format
         try:
             file_obj_id = ObjectId(file_id)
         except Exception as e:
@@ -113,7 +107,6 @@ async def get_file(file_id: str, request: Request, current_user=Depends(get_curr
             raise HTTPException(
                 status_code=400, detail=f"Invalid file ID format: {str(e)}")
 
-        # Find file content in MongoDB
         file_content = await request.app.db.pdfs_content.find_one({
             "_id": file_obj_id,
             "user_id": current_user.id
@@ -125,7 +118,6 @@ async def get_file(file_id: str, request: Request, current_user=Depends(get_curr
 
         print(f"File found. Size: {len(file_content['content'])} bytes")
 
-        # Set appropriate headers for PDF content
         return Response(
             content=file_content["content"],
             media_type="application/pdf",
@@ -146,17 +138,15 @@ async def get_file(file_id: str, request: Request, current_user=Depends(get_curr
 @router.delete("/{pdf_id}")
 async def delete_pdf(pdf_id: str, request: Request, current_user=Depends(get_current_user)):
     try:
-        # Find the PDF metadata first
+
         pdf_metadata = await request.app.db.pdfs.find_one({"_id": ObjectId(pdf_id), "user_id": current_user.id})
         if not pdf_metadata:
             raise HTTPException(status_code=404, detail="PDF not found")
 
         file_id = pdf_metadata["file_id"]
 
-        # Delete PDF content
         await request.app.db.pdfs_content.delete_one({"_id": ObjectId(file_id)})
 
-        # Delete PDF metadata
         await request.app.db.pdfs.delete_one({"_id": ObjectId(pdf_id)})
 
         return {"message": "PDF deleted successfully"}

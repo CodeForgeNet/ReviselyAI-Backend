@@ -1,4 +1,3 @@
-# services/__init__.py
 from . import pdf_reader
 from . import gemini_client
 from . import quiz_generator

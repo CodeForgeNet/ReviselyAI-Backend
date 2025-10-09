@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from schemas import ChatRequest, ChatResp # Removed ReviseChatRequest
+from schemas import ChatRequest, ChatResp
 from services.rag_engine import answer_with_context
-from services.gemini_client import get_gemini_response # Import get_gemini_response
+from services.gemini_client import get_gemini_response
 from routers.auth import get_current_user
-from bson.objectid import ObjectId # Import ObjectId for MongoDB _id
+from bson.objectid import ObjectId
 
 router = APIRouter()
 

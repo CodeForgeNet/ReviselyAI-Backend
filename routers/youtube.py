@@ -1,4 +1,3 @@
-# routers/youtube.py
 from fastapi import APIRouter, Query
 from services.youtube_recommender import search_youtube_videos
 
