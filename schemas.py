@@ -2,29 +2,19 @@ from pydantic import BaseModel, Field
 from typing import Any, List, Optional, Callable # Import Callable
 from datetime import datetime
 from bson import ObjectId # Import ObjectId for custom type
-from pydantic_core import core_schema # Import core_schema
+from pydantic_core import core_schema, PydanticCustomError # Import core_schema and PydanticCustomError
 
 
 class PyObjectId(ObjectId):
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: Callable[[Any], core_schema.CoreSchema]) -> core_schema.CoreSchema:
+        def validate_from_str(input_value: str) -> ObjectId:
+            if not ObjectId.is_valid(input_value):
+                raise PydanticCustomError("invalid_object_id", "Invalid ObjectId")
+            return ObjectId(input_value)
 
-    @classmethod
-    def validate(cls, v):
-        if v is None: # Allow None values
-            return None
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema: core_schema.CoreSchema, handler: Callable[[Any], core_schema.CoreSchema]) -> core_schema.CoreSchema:
-        # This method is called by Pydantic v2 to get the JSON schema for the type
-        # We want to represent ObjectId as a string in the JSON schema
-        return core_schema.json_or_ser_pydantic_validate_json_fallback(
-            core_schema.str_schema(),
-            core_schema.is_instance_schema(ObjectId),
+        return core_schema.no_info_plain_validator_function(
+            validate_from_str,
             serialization=core_schema.to_string_ser_schema(),
         )
 
