@@ -73,7 +73,8 @@ class ChatRequest(BaseModel):
 
 class ChatResp(BaseModel):
     answer: str
-    sources: List[str] 
+    sources: List[str]
+    session_id: Optional[str] = None # Added session_id
 
 
 class ReviseChatRequestCreate(BaseModel):
