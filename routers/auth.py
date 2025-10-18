@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel
@@ -7,37 +8,37 @@ from firebase_admin import credentials, auth as firebase_auth
 from datetime import datetime
 from bson.objectid import ObjectId
 
-
 load_dotenv()
 
 router = APIRouter()
 
-
 def _init_firebase():
     if firebase_admin._apps:
         return
-    json_env = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-    json_path = os.getenv("FIREBASE_CREDENTIALS_JSON")
-    if json_env:
 
-        fp = "/tmp/firebase_service_account.json"
-        with open(fp, "w") as f:
-            f.write(json_env)
-        cred = credentials.Certificate(fp)
-    elif json_path:
+    # Production: Load from JSON string in env var
+    service_account_json_str = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if service_account_json_str:
+        try:
+            service_account_info = json.loads(service_account_json_str)
+            cred = credentials.Certificate(service_account_info)
+        except json.JSONDecodeError:
+            raise ValueError("Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON.")
+    # Development: Load from file path in env var
+    elif os.getenv("FIREBASE_CREDENTIALS_JSON"):
+        json_path = os.getenv("FIREBASE_CREDENTIALS_JSON")
         cred = credentials.Certificate(json_path)
     else:
         raise RuntimeError(
-            "Set FIREBASE_SERVICE_ACCOUNT_JSON (content) or FIREBASE_CREDENTIALS_JSON (path)")
+            "Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_JSON (prod) or FIREBASE_CREDENTIALS_JSON (dev)."
+        )
+    
     firebase_admin.initialize_app(cred)
-
 
 _init_firebase()
 
-
 class TokenIn(BaseModel):
     token: str
-
 
 @router.post("/verify")
 async def verify_token(payload: TokenIn, request: Request):
@@ -50,7 +51,6 @@ async def verify_token(payload: TokenIn, request: Request):
         user = await request.app.db.users.find_one({"uid": uid})
 
         if not user:
-
             user_data = {
                 "uid": uid,
                 "email": email,
@@ -64,7 +64,6 @@ async def verify_token(payload: TokenIn, request: Request):
     except Exception as e:
         print(f"Token verification error: {str(e)}")
         raise HTTPException(status_code=401, detail="Invalid token")
-
 
 async def get_current_user(request: Request, authorization: str = Header(None)):
     print(
