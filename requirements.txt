@@ -19,3 +19,4 @@ python-jose
 bcrypt
 thefuzz
 firebase-admin
+PyMuPDF
