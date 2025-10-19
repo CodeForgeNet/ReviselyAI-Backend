@@ -27,7 +27,7 @@ async def get_revise_chat_session(session_id: str, request: Request, user=Depend
 @router.post("/ask", response_model=ChatResp)
 async def revise_chat_ask(payload: ReviseChatRequestCreate, request: Request, user=Depends(get_current_user)):
     user_message = ReviseChatMessage(role="user", content=payload.question)
-    response_.content = await get_gemini_response(payload.question)
+    response_content = await get_gemini_response(payload.question)
     ai_message = ReviseChatMessage(role="assistant", content=response_content)
 
     if payload.session_id:
