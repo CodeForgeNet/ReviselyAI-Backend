@@ -12,7 +12,6 @@ langchain-community
 langchain-text-splitters
 sentence-transformers==2.2.2
 transformers==4.39.3
-tokenizers==0.14.1
 langchain-pinecone
 pinecone-client[grpc]
 beautifulsoup4
