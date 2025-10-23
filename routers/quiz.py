@@ -24,7 +24,8 @@ async def generate(request: Request, pdf_id: str = Query(...), mcq: int = 5, saq
 
     context = None
     try:
-        context = retrieve_top_k_if_exists(pdf_id, "summary", k=3)
+        query_text = " ".join(text.split()[:100])
+        context = retrieve_top_k_if_exists(pdf_id, query_text, k=3)
     except Exception:
         context = None
 

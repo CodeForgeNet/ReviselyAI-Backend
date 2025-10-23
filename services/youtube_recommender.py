@@ -1,12 +1,26 @@
 import os
 import requests
+from services.pdf_reader import extract_text
+from bson.objectid import ObjectId
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 
-def search_youtube_videos(query: str, max_results: int = 5):
+async def search_youtube_videos(pdf_id: str, db, max_results: int = 5):
     if not YOUTUBE_API_KEY:
         return []
+
+    pdf_metadata = await db.pdfs.find_one({"_id": ObjectId(pdf_id)})
+    if not pdf_metadata:
+        raise Exception("PDF not found")
+
+    pdf_content_doc = await db.pdfs_content.find_one({"_id": ObjectId(pdf_metadata["file_id"])})
+    if not pdf_content_doc:
+        raise Exception("PDF content not found")
+
+    text = extract_text(pdf_content_doc["content"])
+    query = " ".join(text.split()[:100])
+
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
         "part": "snippet",

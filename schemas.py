@@ -36,7 +36,7 @@ class UploadResp(BaseModel):
     is_indexed: bool
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
 
@@ -50,7 +50,7 @@ class PDFFileBase(BaseModel):
     file_id: str 
     
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
 
@@ -60,7 +60,7 @@ class GenerateQuizResp(BaseModel):
     questions: Any
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
 
@@ -79,7 +79,7 @@ class ChatResp(BaseModel):
 
 class ReviseChatRequestCreate(BaseModel):
     question: str
-    session_id: Optional[str] = None 
+    session_id: Optional[str] = None
 
 
 class ReviseChatMessage(BaseModel):
@@ -105,7 +105,7 @@ class ReviseChatSession(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
 

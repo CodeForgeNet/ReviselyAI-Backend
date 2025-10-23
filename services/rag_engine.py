@@ -2,13 +2,14 @@ import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_pinecone import Pinecone
 import requests
 import shutil
 from bson.objectid import ObjectId
 import motor.motor_asyncio
 from pymongo import MongoClient
 from services.gemini_client import get_gemini_response
+from services.pinecone_client import get_pinecone_index
 
 
 async def build_vectorstore_for_pdf(pdf_id: str, file_id: str, db):
@@ -37,11 +38,15 @@ async def build_vectorstore_for_pdf(pdf_id: str, file_id: str, db):
 
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2")
-        vectorstore = FAISS.from_documents(texts, embeddings)
 
-        vectorstore_path = f"vectorstores/{pdf_id}"
-        vectorstore.save_local(vectorstore_path)
-        print(f"Vector store for PDF {pdf_id} built and saved.")
+        index_name = str(pdf_id)
+        dimension = 384
+        pinecone_index = get_pinecone_index(index_name, dimension)
+
+        Pinecone.from_documents(
+            texts, embeddings, index_name=index_name)
+
+        print(f"Vector store for PDF {pdf_id} built and saved in Pinecone.")
 
     except Exception as e:
         print(f"Error building vector store for PDF {pdf_id}: {e}")
@@ -53,20 +58,20 @@ async def build_vectorstore_for_pdf(pdf_id: str, file_id: str, db):
 
 
 def retrieve_top_k_if_exists(pdf_id: str, query: str, k: int = 3):
-    vectorstore_path = f"vectorstores/{pdf_id}"
-    if not os.path.exists(vectorstore_path):
-        print(
-            f"Vector store not found for PDF {pdf_id}. Cannot retrieve context.")
-        return []
+    index_name = str(pdf_id)
 
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectorstore = FAISS.load_local(
-        vectorstore_path, embeddings, allow_dangerous_deserialization=True)
 
-    docs = vectorstore.similarity_search(query, k=k)
-
-    return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
+    try:
+        vectorstore = Pinecone.from_existing_index(
+            index_name=index_name, embedding=embeddings)
+        docs = vectorstore.similarity_search(query, k=k)
+        return [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in docs]
+    except Exception as e:
+        print(
+            f"Error retrieving from Pinecone index {index_name}: {e}")
+        return []
 
 
 async def answer_with_context(pdf_id: str, question: str, top_k: int = 4):
