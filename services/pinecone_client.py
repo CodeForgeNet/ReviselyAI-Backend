@@ -1,5 +1,5 @@
 import os
-from pinecone import Pinecone
+from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,7 +22,8 @@ def get_pinecone_index(index_name: str, dimension: int, metric: str = 'cosine'):
         pinecone_client.create_index(
             name=index_name,
             dimension=dimension,
-            metric=metric
+            metric=metric,
+            spec=ServerlessSpec(cloud='aws', region='us-east-1')
         )
     return pinecone_client.Index(index_name)
 
