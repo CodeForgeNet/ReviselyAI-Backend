@@ -14,18 +14,33 @@ if not PINECONE_API_KEY or not PINECONE_ENVIRONMENT:
 pinecone_client = Pinecone(api_key=PINECONE_API_KEY,
                            environment=PINECONE_ENVIRONMENT)
 
-def get_pinecone_index(index_name: str, dimension: int, metric: str = 'cosine'):
+REVISELY_INDEX_NAME = "revisely-documents"
+
+
+def get_pinecone_index(dimension: int, metric: str = 'cosine'):
     """
     Initializes and returns a Pinecone index. Creates the index if it doesn't exist.
     """
-    if index_name not in pinecone_client.list_indexes():
+    existing_indexes = pinecone_client.list_indexes()
+    index_exists = False
+    for index_info in existing_indexes:
+        if index_info['name'] == REVISELY_INDEX_NAME:
+            index_exists = True
+            break
+
+    if not index_exists:
+
         pinecone_client.create_index(
-            name=index_name,
+            name=REVISELY_INDEX_NAME,
             dimension=dimension,
             metric=metric,
             spec=ServerlessSpec(cloud='aws', region='us-east-1')
         )
-    return pinecone_client.Index(index_name)
+
+    else:
+        print(
+            f"Pinecone index '{REVISELY_INDEX_NAME}' already exists. Connecting to existing index.")
+    return pinecone_client.Index(REVISELY_INDEX_NAME)
 
 # Example usage (can be removed or commented out after initial setup)
 # if __name__ == "__main__":
