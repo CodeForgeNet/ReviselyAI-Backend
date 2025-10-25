@@ -180,3 +180,23 @@ async def get_progress(request: Request, user=Depends(get_current_user)):
         },
         "attempts": processed_attempts
     }
+
+
+@router.get("/attempt/{attempt_id}")
+async def get_attempt_details(attempt_id: str, request: Request, user=Depends(get_current_user)):
+    attempt = await request.app.db.quiz_attempts.find_one({"_id": ObjectId(attempt_id), "user_id": user.id})
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+
+    quiz = await request.app.db.quizzes.find_one({"_id": ObjectId(attempt["quiz_id"])})
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    questions = quiz.get("questions", {})
+    user_answers = attempt.get("answers", {})
+
+    return {
+        "questions": questions,
+        "user_answers": user_answers,
+        "created_at": attempt["created_at"]
+    }
